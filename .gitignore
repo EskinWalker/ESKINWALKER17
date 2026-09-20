@@ -1,0 +1,7 @@
+cameras.txt
+scan_results.txt
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
