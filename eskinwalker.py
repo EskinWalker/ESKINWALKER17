@@ -6,6 +6,7 @@ import time
 import ipaddress
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from urllib.parse import urlparse
 
 import requests
 
@@ -17,7 +18,7 @@ import requests
 
 APP_NAME = "ESKINWALKER"
 CREATOR = "ArMin"
-VERSION = "7.1"
+VERSION = "5.1"
 
 CAMERA_FILE = "cameras.txt"
 RESULT_FILE = "scan_results.txt"
@@ -25,38 +26,37 @@ RESULT_FILE = "scan_results.txt"
 TIMEOUT = 3
 MAX_WORKERS = 10
 
+CAMERAS = []
+
 
 # ============================================================
 # ANSI THEME
+# ONLY: GREEN / RED / WHITE
 # ============================================================
 
 RESET = "\033[0m"
 BOLD = "\033[1m"
-DIM = "\033[2m"
 
+# GREEN
 GREEN = "\033[32m"
 BRIGHT_GREEN = "\033[1;32m"
-DARK_GREEN = "\033[2;32m"
 
-WHITE = "\033[37m"
-BRIGHT_WHITE = "\033[1;37m"
-
+# RED
 RED = "\033[31m"
 BRIGHT_RED = "\033[1;31m"
 
+# WHITE
+WHITE = "\033[37m"
+BRIGHT_WHITE = "\033[1;37m"
 
+
+# Theme mapping
 TITLE = BRIGHT_GREEN
 TEXT = BRIGHT_WHITE
-MUTED = DARK_GREEN
+BORDER = GREEN
 SUCCESS = BRIGHT_GREEN
 ERROR = BRIGHT_RED
-
-
-# ============================================================
-# DATA
-# ============================================================
-
-CAMERAS = []
+MUTED = WHITE
 
 
 # ============================================================
@@ -74,20 +74,40 @@ def terminal_width():
         return 76
 
 
-def separator(char="─"):
-    print(f"{MUTED}{char * terminal_width()}{RESET}")
-
-
-def section(title):
-    print()
-    separator()
-    print(f"{TITLE}{BOLD}{title}{RESET}")
-    separator()
+def separator(char="─", color=BORDER):
+    print(f"{color}{char * terminal_width()}{RESET}")
 
 
 def pause():
     print()
-    input(f"{MUTED}Press Enter to continue...{RESET}")
+    input(
+        f"{WHITE}Press Enter to continue...{RESET}"
+    )
+
+
+def header(title):
+    clear()
+
+    print(
+        f"{BRIGHT_GREEN}{BOLD}"
+        f"ESKINWALKER"
+        f"{RESET}"
+        f"{WHITE}  //  {title}{RESET}"
+    )
+
+    separator("═", BRIGHT_GREEN)
+
+
+def section(title):
+    print()
+
+    print(
+        f"{BRIGHT_GREEN}{BOLD}"
+        f"┌──[ {title} ]"
+        f"{RESET}"
+    )
+
+    separator("─", GREEN)
 
 
 # ============================================================
@@ -97,26 +117,35 @@ def pause():
 def logo():
     clear()
 
-    print(f"{BRIGHT_GREEN}{BOLD}")
+    print(
+        f"{BRIGHT_GREEN}{BOLD}"
+    )
+
     print(r"""
-██╗    ██╗ █████╗ ██╗     ██╗  ██╗███████╗██████╗
-██║    ██║██╔══██╗██║     ██║ ██╔╝██╔════╝██╔══██╗
-██║ █╗ ██║███████║██║     █████╔╝ █████╗  ██████╔╝
-██║███╗██║██╔══██║██║     ██╔═██╗ ██╔══╝  ██╔══██╗
-╚███╔███╔╝██║  ██║███████╗██║  ██╗███████╗██║  ██║
- ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
+███████╗███████╗██╗  ██╗██╗███╗   ██╗██╗    ██╗ █████╗ ██╗     ██╗  ██╗███████╗██████╗
+██╔════╝██╔════╝██║ ██╔╝██║████╗  ██║██║    ██║██╔══██╗██║     ██║ ██╔╝██╔════╝██╔══██╗
+█████╗  ███████╗█████╔╝ ██║██╔██╗ ██║██║ █╗ ██║███████║██║     █████╔╝ █████╗  ██████╔╝
+██╔══╝  ╚════██║██╔═██╗ ██║██║╚██╗██║██║███╗██║██╔══██║██║     ██╔═██╗ ██╔══╝  ██╔══██╗
+███████╗███████║██║  ██╗██║██║ ╚████║╚███╔███╔╝██║  ██║███████╗██║  ██╗███████╗██║  ██║
+╚══════╝╚══════╝╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝ ╚══╝╚══╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
 """)
+
     print(RESET)
 
     print(
-        f"{MUTED}                 E S K I N W A L K E R{RESET}"
+        f"{BRIGHT_GREEN}{BOLD}"
+        f"                 E S K I N W A L K E R"
+        f"{RESET}"
     )
+
     print(
-        f"{MUTED}              LOCAL ENDPOINT CONTROL{RESET}"
+        f"{WHITE}"
+        f"                 LOCAL ENDPOINT CONTROL"
+        f"{RESET}"
     )
 
     print()
-    separator()
+    separator("═", BRIGHT_GREEN)
 
 
 # ============================================================
@@ -124,16 +153,23 @@ def logo():
 # ============================================================
 
 def load_cameras():
-    global CAMERAS
-
     CAMERAS.clear()
 
     if not os.path.exists(CAMERA_FILE):
-        open(CAMERA_FILE, "a", encoding="utf-8").close()
+        open(
+            CAMERA_FILE,
+            "a",
+            encoding="utf-8"
+        ).close()
         return
 
     try:
-        with open(CAMERA_FILE, "r", encoding="utf-8") as file:
+        with open(
+            CAMERA_FILE,
+            "r",
+            encoding="utf-8"
+        ) as file:
+
             for line in file:
                 value = line.strip()
 
@@ -147,21 +183,37 @@ def load_cameras():
                     CAMERAS.append(value)
 
     except OSError as exc:
-        print(f"{ERROR}[ ERROR ]{RESET} Could not read {CAMERA_FILE}")
-        print(f"{MUTED}{exc}{RESET}")
+        print(
+            f"{ERROR}[ ERROR ]{RESET} "
+            f"Could not read {CAMERA_FILE}"
+        )
+        print(
+            f"{WHITE}{exc}{RESET}"
+        )
 
 
 def save_cameras():
     try:
-        with open(CAMERA_FILE, "w", encoding="utf-8") as file:
+        with open(
+            CAMERA_FILE,
+            "w",
+            encoding="utf-8"
+        ) as file:
+
             for camera in CAMERAS:
                 file.write(camera + "\n")
 
         return True
 
     except OSError as exc:
-        print(f"{ERROR}[ ERROR ]{RESET} Could not save {CAMERA_FILE}")
-        print(f"{MUTED}{exc}{RESET}")
+        print(
+            f"{ERROR}[ ERROR ]{RESET} "
+            f"Could not save {CAMERA_FILE}"
+        )
+        print(
+            f"{WHITE}{exc}{RESET}"
+        )
+
         return False
 
 
@@ -176,11 +228,12 @@ def extract_host(url):
         if "://" not in value:
             return None
 
-        from urllib.parse import urlparse
-
         parsed = urlparse(value)
 
-        if parsed.scheme.lower() not in ("http", "https"):
+        if parsed.scheme.lower() not in (
+            "http",
+            "https"
+        ):
             return None
 
         return parsed.hostname
@@ -195,9 +248,7 @@ def is_local_host(url):
     if not host:
         return False
 
-    host_lower = host.lower()
-
-    if host_lower == "localhost":
+    if host.lower() == "localhost":
         return True
 
     try:
@@ -226,17 +277,19 @@ def validate_endpoint(url):
 
 
 # ============================================================
-# STATUS HEADER
+# STATUS
 # ============================================================
 
 def status_header():
     print(
-        f"{MUTED}STATUS{RESET} "
+        f"{WHITE}STATUS{RESET} "
         f"{SUCCESS}READY{RESET}"
-        f"{MUTED}  |  ENDPOINTS:{RESET} "
+        f"{WHITE}  |  ENDPOINTS:{RESET} "
         f"{BRIGHT_WHITE}{len(CAMERAS):04d}{RESET}"
-        f"{MUTED}  |  TIME:{RESET} "
-        f"{BRIGHT_WHITE}{datetime.now().strftime('%H:%M:%S')}{RESET}"
+        f"{WHITE}  |  TIME:{RESET} "
+        f"{BRIGHT_WHITE}"
+        f"{datetime.now().strftime('%H:%M:%S')}"
+        f"{RESET}"
     )
 
 
@@ -245,19 +298,29 @@ def status_header():
 # ============================================================
 
 def progress_bar(current, total):
+
     if total <= 0:
         return
 
-    width = 28
-    filled = int((current / total) * width)
+    bar_width = 28
 
-    bar = "█" * filled + "─" * (width - filled)
-    percent = int((current / total) * 100)
+    filled = int(
+        (current / total) * bar_width
+    )
+
+    bar = (
+        "█" * filled
+        + "─" * (bar_width - filled)
+    )
+
+    percent = int(
+        (current / total) * 100
+    )
 
     print(
-        f"\r{MUTED}[{RESET}"
+        f"\r{WHITE}[{RESET}"
         f"{BRIGHT_GREEN}{bar}{RESET}"
-        f"{MUTED}] {RESET}"
+        f"{WHITE}] {RESET}"
         f"{BRIGHT_WHITE}{percent:3d}%{RESET}",
         end="",
         flush=True
@@ -269,6 +332,7 @@ def progress_bar(current, total):
 # ============================================================
 
 def boot_sequence():
+
     logo()
 
     messages = [
@@ -280,103 +344,149 @@ def boot_sequence():
     ]
 
     for message in messages:
+
         print(
-            f"{MUTED}[{RESET}"
+            f"{WHITE}[{RESET}"
             f"{BRIGHT_GREEN}+{RESET}"
-            f"{MUTED}]{RESET} "
-            f"{WHITE}{message}{RESET}"
+            f"{WHITE}] "
+            f"{BRIGHT_WHITE}{message}{RESET}"
         )
+
         time.sleep(0.08)
 
     print()
 
 
 # ============================================================
-# ENDPOINT MANAGEMENT
+# ENDPOINT LIST
 # ============================================================
 
 def list_endpoints():
+
     header("ENDPOINT LIST")
 
     if not CAMERAS:
-        print(f"{ERROR}No endpoints found.{RESET}")
+        print(
+            f"{ERROR}No endpoints found.{RESET}"
+        )
         pause()
         return
 
-    for index, url in enumerate(CAMERAS, start=1):
+    for index, url in enumerate(
+        CAMERAS,
+        start=1
+    ):
+
         print(
-            f"{MUTED}{index:04d}{RESET}  "
-            f"{WHITE}{url}{RESET}"
+            f"{BRIGHT_GREEN}{index:04d}{RESET}  "
+            f"{BRIGHT_WHITE}{url}{RESET}"
         )
 
     print()
-    print(
-        f"{MUTED}Total:{RESET} "
-        f"{BRIGHT_WHITE}{len(CAMERAS)}{RESET}"
-    )
-
-    pause()
-
-
-def count_endpoints():
-    header("ENDPOINT COUNT")
 
     print(
-        f"{MUTED}Current count:{RESET} "
+        f"{WHITE}Total:{RESET} "
         f"{BRIGHT_GREEN}{len(CAMERAS)}{RESET}"
     )
 
     pause()
 
 
+# ============================================================
+# COUNT
+# ============================================================
+
+def count_endpoints():
+
+    header("ENDPOINT COUNT")
+
+    print(
+        f"{WHITE}Current count:{RESET} "
+        f"{BRIGHT_GREEN}{BOLD}"
+        f"{len(CAMERAS)}"
+        f"{RESET}"
+    )
+
+    pause()
+
+
+# ============================================================
+# SEARCH
+# ============================================================
+
 def search_endpoints():
+
     header("ENDPOINT SEARCH")
 
     query = input(
-        f"{BRIGHT_GREEN}Search > {RESET}"
+        f"{BRIGHT_GREEN}{BOLD}"
+        f"Search"
+        f"{RESET}{WHITE} > {RESET}"
     ).strip().lower()
 
     if not query:
-        print(f"{ERROR}Search query cannot be empty.{RESET}")
+        print(
+            f"{ERROR}[ ERROR ]{RESET} "
+            f"Search query cannot be empty."
+        )
         pause()
         return
 
     results = [
-        url for url in CAMERAS
+        url
+        for url in CAMERAS
         if query in url.lower()
     ]
 
     print()
 
     if not results:
-        print(f"{ERROR}[ NOT FOUND ]{RESET} No matching endpoints.")
+        print(
+            f"{ERROR}[ NOT FOUND ]{RESET} "
+            f"No matching endpoints."
+        )
         pause()
         return
 
-    for index, url in enumerate(results, start=1):
+    for index, url in enumerate(
+        results,
+        start=1
+    ):
+
         print(
             f"{BRIGHT_GREEN}{index:04d}{RESET}  "
-            f"{WHITE}{url}{RESET}"
+            f"{BRIGHT_WHITE}{url}{RESET}"
         )
 
     print()
+
     print(
-        f"{MUTED}Matches:{RESET} "
+        f"{WHITE}Matches:{RESET} "
         f"{BRIGHT_GREEN}{len(results)}{RESET}"
     )
 
     pause()
 
 
+# ============================================================
+# ADD
+# ============================================================
+
 def add_endpoint():
+
     header("ADD ENDPOINT")
 
     url = input(
-        f"{BRIGHT_GREEN}Endpoint > {RESET}"
+        f"{BRIGHT_GREEN}{BOLD}"
+        f"Endpoint"
+        f"{RESET}{WHITE} > {RESET}"
     ).strip()
 
     if not url:
-        print(f"{ERROR}[ ERROR ]{RESET} Empty endpoint.")
+        print(
+            f"{ERROR}[ ERROR ]{RESET} "
+            f"Empty endpoint."
+        )
         pause()
         return
 
@@ -385,7 +495,7 @@ def add_endpoint():
     if not valid:
         print(
             f"{ERROR}[ REJECTED ]{RESET} "
-            f"{WHITE}{reason}{RESET}"
+            f"{BRIGHT_WHITE}{reason}{RESET}"
         )
         pause()
         return
@@ -401,32 +511,46 @@ def add_endpoint():
     CAMERAS.append(url)
 
     if save_cameras():
+
         print(
             f"{SUCCESS}[ ADDED ]{RESET} "
-            f"{WHITE}{url}{RESET}"
+            f"{BRIGHT_WHITE}{url}{RESET}"
         )
 
     pause()
 
 
+# ============================================================
+# REMOVE
+# ============================================================
+
 def remove_endpoint():
+
     header("REMOVE ENDPOINT")
 
     if not CAMERAS:
-        print(f"{ERROR}No endpoints available.{RESET}")
+        print(
+            f"{ERROR}No endpoints available.{RESET}"
+        )
         pause()
         return
 
-    for index, url in enumerate(CAMERAS, start=1):
+    for index, url in enumerate(
+        CAMERAS,
+        start=1
+    ):
+
         print(
-            f"{MUTED}{index:04d}{RESET}  "
-            f"{WHITE}{url}{RESET}"
+            f"{BRIGHT_GREEN}{index:04d}{RESET}  "
+            f"{BRIGHT_WHITE}{url}{RESET}"
         )
 
     print()
 
     choice = input(
-        f"{BRIGHT_GREEN}Endpoint number > {RESET}"
+        f"{BRIGHT_GREEN}{BOLD}"
+        f"Endpoint number"
+        f"{RESET}{WHITE} > {RESET}"
     ).strip()
 
     try:
@@ -436,16 +560,20 @@ def remove_endpoint():
             raise ValueError
 
     except ValueError:
-        print(f"{ERROR}[ ERROR ]{RESET} Invalid number.")
+        print(
+            f"{ERROR}[ ERROR ]{RESET} "
+            f"Invalid number."
+        )
         pause()
         return
 
     removed = CAMERAS.pop(index - 1)
 
     if save_cameras():
+
         print(
             f"{SUCCESS}[ REMOVED ]{RESET} "
-            f"{WHITE}{removed}{RESET}"
+            f"{BRIGHT_WHITE}{removed}{RESET}"
         )
 
     pause()
@@ -456,6 +584,7 @@ def remove_endpoint():
 # ============================================================
 
 def check_endpoint(url):
+
     valid, reason = validate_endpoint(url)
 
     if not valid:
@@ -466,6 +595,7 @@ def check_endpoint(url):
         }
 
     try:
+
         response = requests.get(
             url,
             timeout=TIMEOUT,
@@ -479,6 +609,7 @@ def check_endpoint(url):
         }
 
     except requests.exceptions.Timeout:
+
         return {
             "url": url,
             "status": "OFFLINE",
@@ -486,6 +617,7 @@ def check_endpoint(url):
         }
 
     except requests.exceptions.ConnectionError:
+
         return {
             "url": url,
             "status": "OFFLINE",
@@ -493,6 +625,7 @@ def check_endpoint(url):
         }
 
     except requests.exceptions.RequestException as exc:
+
         return {
             "url": url,
             "status": "OFFLINE",
@@ -500,6 +633,7 @@ def check_endpoint(url):
         }
 
     except Exception as exc:
+
         return {
             "url": url,
             "status": "OFFLINE",
@@ -512,27 +646,30 @@ def check_endpoint(url):
 # ============================================================
 
 def scan_endpoints():
+
     header("LOCAL ENDPOINT SCAN")
 
     if not CAMERAS:
-        print(f"{ERROR}No endpoints available.{RESET}")
+        print(
+            f"{ERROR}No endpoints available.{RESET}"
+        )
         pause()
         return
 
     total = len(CAMERAS)
 
     print(
-        f"{MUTED}Targets:{RESET} "
+        f"{WHITE}Targets:{RESET} "
         f"{BRIGHT_WHITE}{total}{RESET}"
     )
 
     print(
-        f"{MUTED}Workers:{RESET} "
+        f"{WHITE}Workers:{RESET} "
         f"{BRIGHT_WHITE}{MAX_WORKERS}{RESET}"
     )
 
     print(
-        f"{MUTED}Timeout:{RESET} "
+        f"{WHITE}Timeout:{RESET} "
         f"{BRIGHT_WHITE}{TIMEOUT}s{RESET}"
     )
 
@@ -548,17 +685,25 @@ def scan_endpoints():
     ) as executor:
 
         future_map = {
-            executor.submit(check_endpoint, url): index
-            for index, url in enumerate(CAMERAS)
+            executor.submit(
+                check_endpoint,
+                url
+            ): index
+            for index, url
+            in enumerate(CAMERAS)
         }
 
-        for future in as_completed(future_map):
+        for future in as_completed(
+            future_map
+        ):
+
             index = future_map[future]
 
             try:
                 result = future.result()
 
             except Exception as exc:
+
                 result = {
                     "url": CAMERAS[index],
                     "status": "OFFLINE",
@@ -568,7 +713,10 @@ def scan_endpoints():
             results[index] = result
             completed += 1
 
-            progress_bar(completed, total)
+            progress_bar(
+                completed,
+                total
+            )
 
     print("\n")
 
@@ -577,6 +725,7 @@ def scan_endpoints():
     skipped = 0
 
     for result in results:
+
         if result["status"] == "ONLINE":
             online += 1
 
@@ -587,130 +736,189 @@ def scan_endpoints():
             skipped += 1
 
     for result in results:
+
         status = result["status"]
         url = result["url"]
 
         if status == "ONLINE":
-            code = result.get("code", "?")
+
+            code = result.get(
+                "code",
+                "?"
+            )
 
             print(
-                f"{SUCCESS}[ ONLINE  ]{RESET} "
-                f"{WHITE}{url}{RESET} "
-                f"{MUTED}HTTP {code}{RESET}"
+                f"{BRIGHT_GREEN}{BOLD}"
+                f"[ ONLINE  ]"
+                f"{RESET} "
+                f"{BRIGHT_WHITE}{url}{RESET} "
+                f"{WHITE}HTTP {code}{RESET}"
             )
 
         elif status == "OFFLINE":
-            detail = result.get("detail", "")
+
+            detail = result.get(
+                "detail",
+                ""
+            )
 
             print(
-                f"{ERROR}[ OFFLINE ]{RESET} "
-                f"{WHITE}{url}{RESET} "
-                f"{MUTED}{detail}{RESET}"
+                f"{BRIGHT_RED}{BOLD}"
+                f"[ OFFLINE ]"
+                f"{RESET} "
+                f"{BRIGHT_WHITE}{url}{RESET} "
+                f"{WHITE}{detail}{RESET}"
             )
 
         else:
+
             print(
-                f"{MUTED}[ SKIPPED ]{RESET} "
-                f"{WHITE}{url}{RESET}"
+                f"{WHITE}{BOLD}"
+                f"[ SKIPPED ]"
+                f"{RESET} "
+                f"{BRIGHT_WHITE}{url}{RESET}"
             )
 
     elapsed = time.time() - start_time
 
     print()
-    separator()
+    separator("═", BRIGHT_GREEN)
 
     print(
-        f"{MUTED}ONLINE   :{RESET} "
-        f"{SUCCESS}{online}{RESET}"
+        f"{WHITE}ONLINE   :{RESET} "
+        f"{BRIGHT_GREEN}{BOLD}{online}{RESET}"
     )
 
     print(
-        f"{MUTED}OFFLINE  :{RESET} "
-        f"{ERROR}{offline}{RESET}"
+        f"{WHITE}OFFLINE  :{RESET} "
+        f"{BRIGHT_RED}{BOLD}{offline}{RESET}"
     )
 
     print(
-        f"{MUTED}SKIPPED  :{RESET} "
-        f"{WHITE}{skipped}{RESET}"
+        f"{WHITE}SKIPPED  :{RESET} "
+        f"{BRIGHT_WHITE}{skipped}{RESET}"
     )
 
     print(
-        f"{MUTED}TOTAL    :{RESET} "
+        f"{WHITE}TOTAL    :{RESET} "
         f"{BRIGHT_WHITE}{total}{RESET}"
     )
 
     print(
-        f"{MUTED}TIME     :{RESET} "
+        f"{WHITE}TIME     :{RESET} "
         f"{BRIGHT_WHITE}{elapsed:.2f}s{RESET}"
     )
 
-    separator()
+    separator("═", BRIGHT_GREEN)
 
-    save_scan_results(results, elapsed)
+    save_scan_results(
+        results,
+        elapsed
+    )
 
     pause()
 
 
 # ============================================================
-# SAVE SCAN REPORT
+# SAVE REPORT
 # ============================================================
 
-def save_scan_results(results, elapsed):
+def save_scan_results(
+    results,
+    elapsed
+):
+
     try:
+
         with open(
             RESULT_FILE,
             "w",
             encoding="utf-8"
         ) as file:
 
-            file.write("=" * 70 + "\n")
-            file.write("ESKINWALKER SCAN REPORT\n")
-            file.write("=" * 70 + "\n")
             file.write(
-                f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                "=" * 70 + "\n"
             )
+
+            file.write(
+                "ESKINWALKER SCAN REPORT\n"
+            )
+
+            file.write(
+                "=" * 70 + "\n"
+            )
+
+            file.write(
+                "Date: "
+                + datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
+                + "\n"
+            )
+
             file.write(
                 f"Total: {len(results)}\n"
             )
+
             file.write(
                 f"Elapsed: {elapsed:.2f}s\n"
             )
-            file.write("=" * 70 + "\n\n")
+
+            file.write(
+                "=" * 70 + "\n\n"
+            )
 
             for result in results:
+
                 status = result["status"]
                 url = result["url"]
 
                 if status == "ONLINE":
-                    code = result.get("code", "?")
+
+                    code = result.get(
+                        "code",
+                        "?"
+                    )
 
                     file.write(
-                        f"[ ONLINE ] {url} | HTTP {code}\n"
+                        f"[ ONLINE ] "
+                        f"{url} | HTTP {code}\n"
                     )
 
                 elif status == "OFFLINE":
-                    detail = result.get("detail", "")
+
+                    detail = result.get(
+                        "detail",
+                        ""
+                    )
 
                     file.write(
-                        f"[ OFFLINE ] {url} | {detail}\n"
+                        f"[ OFFLINE ] "
+                        f"{url} | {detail}\n"
                     )
 
                 else:
+
                     file.write(
-                        f"[ SKIPPED ] {url}\n"
+                        f"[ SKIPPED ] "
+                        f"{url}\n"
                     )
 
         print(
-            f"{SUCCESS}[ SAVED ]{RESET} "
-            f"{RESULT_FILE}"
+            f"{BRIGHT_GREEN}[ SAVED ]{RESET} "
+            f"{BRIGHT_WHITE}{RESULT_FILE}{RESET}"
         )
 
     except OSError as exc:
+
         print(
             f"{ERROR}[ ERROR ]{RESET} "
             f"Could not save scan report."
         )
-        print(f"{MUTED}{exc}{RESET}")
+
+        print(
+            f"{WHITE}{exc}{RESET}"
+        )
 
 
 # ============================================================
@@ -718,46 +926,51 @@ def save_scan_results(results, elapsed):
 # ============================================================
 
 def system_info():
+
     header("SYSTEM INFORMATION")
 
     print(
-        f"{MUTED}Application :{RESET} "
+        f"{WHITE}Application :{RESET} "
         f"{BRIGHT_WHITE}{APP_NAME}{RESET}"
     )
 
     print(
-        f"{MUTED}Version     :{RESET} "
+        f"{WHITE}Version     :{RESET} "
         f"{BRIGHT_GREEN}{VERSION}{RESET}"
     )
 
     print(
-        f"{MUTED}Creator     :{RESET} "
+        f"{WHITE}Creator     :{RESET} "
         f"{BRIGHT_WHITE}{CREATOR}{RESET}"
     )
 
     print(
-        f"{MUTED}Python      :{RESET} "
-        f"{BRIGHT_WHITE}{sys.version.split()[0]}{RESET}"
+        f"{WHITE}Python      :{RESET} "
+        f"{BRIGHT_WHITE}"
+        f"{sys.version.split()[0]}"
+        f"{RESET}"
     )
 
     print(
-        f"{MUTED}Endpoints   :{RESET} "
+        f"{WHITE}Endpoints   :{RESET} "
         f"{BRIGHT_GREEN}{len(CAMERAS)}{RESET}"
     )
 
     print(
-        f"{MUTED}Workers     :{RESET} "
+        f"{WHITE}Workers     :{RESET} "
         f"{BRIGHT_WHITE}{MAX_WORKERS}{RESET}"
     )
 
     print(
-        f"{MUTED}Timeout     :{RESET} "
+        f"{WHITE}Timeout     :{RESET} "
         f"{BRIGHT_WHITE}{TIMEOUT}s{RESET}"
     )
 
     print(
-        f"{MUTED}Scope       :{RESET} "
-        f"{BRIGHT_GREEN}LOCAL / PRIVATE / LINK-LOCAL{RESET}"
+        f"{WHITE}Scope       :{RESET} "
+        f"{BRIGHT_GREEN}"
+        f"LOCAL / PRIVATE / LINK-LOCAL"
+        f"{RESET}"
     )
 
     pause()
@@ -768,54 +981,70 @@ def system_info():
 # ============================================================
 
 def help_menu():
+
     header("HELP")
 
     print(
-        f"{BRIGHT_GREEN}ESKINWALKER{RESET} "
-        f"{WHITE}is a local HTTP endpoint management tool.{RESET}"
+        f"{BRIGHT_GREEN}{BOLD}"
+        f"ESKINWALKER"
+        f"{RESET} "
+        f"{BRIGHT_WHITE}"
+        f"is a local HTTP endpoint management tool."
+        f"{RESET}"
     )
 
     print()
+
     print(
-        f"{MUTED}Supported targets:{RESET}"
+        f"{WHITE}Supported targets:{RESET}"
     )
 
     print(
-        f"{WHITE}- localhost{RESET}"
+        f"{BRIGHT_WHITE}  - localhost{RESET}"
     )
 
     print(
-        f"{WHITE}- loopback addresses{RESET}"
+        f"{BRIGHT_WHITE}  - loopback addresses{RESET}"
     )
 
     print(
-        f"{WHITE}- private IPv4/IPv6 addresses{RESET}"
+        f"{BRIGHT_WHITE}  - private IPv4/IPv6 addresses{RESET}"
     )
 
     print(
-        f"{WHITE}- link-local addresses{RESET}"
-    )
-
-    print()
-    print(
-        f"{MUTED}ONLINE:{RESET} "
-        f"{WHITE}An HTTP response was received.{RESET}"
-    )
-
-    print(
-        f"{MUTED}OFFLINE:{RESET} "
-        f"{WHITE}The endpoint did not respond successfully.{RESET}"
-    )
-
-    print(
-        f"{MUTED}SKIPPED:{RESET} "
-        f"{WHITE}The endpoint is outside the supported scope.{RESET}"
+        f"{BRIGHT_WHITE}  - link-local addresses{RESET}"
     )
 
     print()
+
     print(
-        f"{MUTED}Note:{RESET} "
-        f"{WHITE}ONLINE does not guarantee a camera video stream.{RESET}"
+        f"{BRIGHT_GREEN}ONLINE:{RESET} "
+        f"{BRIGHT_WHITE}"
+        f"An HTTP response was received."
+        f"{RESET}"
+    )
+
+    print(
+        f"{BRIGHT_RED}OFFLINE:{RESET} "
+        f"{BRIGHT_WHITE}"
+        f"The endpoint did not respond successfully."
+        f"{RESET}"
+    )
+
+    print(
+        f"{WHITE}SKIPPED:{RESET} "
+        f"{BRIGHT_WHITE}"
+        f"The endpoint is outside the supported scope."
+        f"{RESET}"
+    )
+
+    print()
+
+    print(
+        f"{WHITE}Note:{RESET} "
+        f"{BRIGHT_WHITE}"
+        f"ONLINE does not guarantee a camera video stream."
+        f"{RESET}"
     )
 
     pause()
@@ -826,6 +1055,7 @@ def help_menu():
 # ============================================================
 
 def show_menu():
+
     print()
 
     status_header()
@@ -833,21 +1063,30 @@ def show_menu():
     print()
 
     print(
-        f"{MUTED}┌────────────────────────────────────────────┐{RESET}"
+        f"{BRIGHT_GREEN}"
+        f"┌────────────────────────────────────────────┐"
+        f"{RESET}"
     )
 
     print(
-        f"{MUTED}│{RESET} "
-        f"{BRIGHT_GREEN}{BOLD}ESKINWALKER{RESET}"
-        f"{MUTED} | {RESET}"
-        f"{BRIGHT_WHITE}{len(CAMERAS):04d}{RESET}"
-        f"{MUTED} endpoints"
-        f"{' ' * max(0, 20 - len(str(len(CAMERAS))))}"
-        f"│{RESET}"
+        f"{BRIGHT_GREEN}│{RESET} "
+        f"{BRIGHT_GREEN}{BOLD}"
+        f"ESKINWALKER"
+        f"{RESET}"
+        f"{WHITE} | {RESET}"
+        f"{BRIGHT_WHITE}"
+        f"{len(CAMERAS):04d}"
+        f"{RESET}"
+        f"{WHITE} endpoints"
+        f"{RESET}"
+        f"                      "
+        f"{BRIGHT_GREEN}│{RESET}"
     )
 
     print(
-        f"{MUTED}├────────────────────────────────────────────┤{RESET}"
+        f"{GREEN}"
+        f"├────────────────────────────────────────────┤"
+        f"{RESET}"
     )
 
     menu_items = [
@@ -863,40 +1102,26 @@ def show_menu():
     ]
 
     for number, name in menu_items:
+
         print(
-            f"{MUTED}│{RESET} "
-            f"{BRIGHT_GREEN}{number}{RESET} "
-            f"{WHITE}- {name:<34}{RESET}"
-            f"{MUTED}│{RESET}"
+            f"{BRIGHT_GREEN}│{RESET} "
+            f"{BRIGHT_GREEN}{BOLD}{number}{RESET} "
+            f"{BRIGHT_WHITE}- {name:<34}{RESET}"
+            f"{BRIGHT_GREEN}│{RESET}"
         )
 
     print(
-        f"{MUTED}│{RESET} "
-        f"{BRIGHT_RED}00{RESET} "
-        f"{WHITE}- {'Exit':<34}{RESET}"
-        f"{MUTED}│{RESET}"
+        f"{BRIGHT_GREEN}│{RESET} "
+        f"{BRIGHT_RED}{BOLD}00{RESET} "
+        f"{BRIGHT_WHITE}- {'Exit':<34}{RESET}"
+        f"{BRIGHT_GREEN}│{RESET}"
     )
 
     print(
-        f"{MUTED}└────────────────────────────────────────────┘{RESET}"
-    )
-
-
-# ============================================================
-# HEADER
-# ============================================================
-
-def header(title):
-    clear()
-
-    print(
-        f"{BRIGHT_GREEN}{BOLD}"
-        f"ESKINWALKER"
+        f"{BRIGHT_GREEN}"
+        f"└────────────────────────────────────────────┘"
         f"{RESET}"
-        f"{WHITE}  |  {title}{RESET}"
     )
-
-    separator()
 
 
 # ============================================================
@@ -904,6 +1129,7 @@ def header(title):
 # ============================================================
 
 def handle_command(command):
+
     commands = {
         "1": list_endpoints,
         "01": list_endpoints,
@@ -929,11 +1155,19 @@ def handle_command(command):
         "8": help_menu,
         "08": help_menu,
 
-        "9": lambda: (clear(), pause()),
-        "09": lambda: (clear(), pause()),
+        "9": lambda: (
+            clear(),
+            pause()
+        ),
+
+        "09": lambda: (
+            clear(),
+            pause()
+        ),
     }
 
     if command in commands:
+
         commands[command]()
         return True
 
@@ -941,11 +1175,12 @@ def handle_command(command):
         return False
 
     print(
-        f"{ERROR}[ ERROR ]{RESET} "
-        f"Unknown command."
+        f"{BRIGHT_RED}[ ERROR ]{RESET} "
+        f"{BRIGHT_WHITE}Unknown command.{RESET}"
     )
 
     time.sleep(0.8)
+
     return True
 
 
@@ -954,17 +1189,22 @@ def handle_command(command):
 # ============================================================
 
 def main():
+
     try:
+
         load_cameras()
+
         boot_sequence()
 
         while True:
+
             show_menu()
 
             command = input(
                 f"\n{BRIGHT_GREEN}{BOLD}"
                 f"ESKINWALKER"
-                f"{RESET}{WHITE} > {RESET}"
+                f"{RESET}"
+                f"{WHITE} > {RESET}"
             ).strip()
 
             if not handle_command(command):
@@ -979,23 +1219,30 @@ def main():
         )
 
         print(
-            f"{MUTED}Session closed.{RESET}"
+            f"{WHITE}Session closed.{RESET}"
         )
 
     except KeyboardInterrupt:
+
         print()
+
         print(
-            f"\n{ERROR}[ INTERRUPTED ]{RESET} "
+            f"{BRIGHT_RED}[ INTERRUPTED ]{RESET} "
+            f"{BRIGHT_WHITE}"
             f"Session terminated."
+            f"{RESET}"
         )
 
     except Exception as exc:
+
         print()
+
         print(
-            f"{ERROR}[ FATAL ERROR ]{RESET}"
+            f"{BRIGHT_RED}[ FATAL ERROR ]{RESET}"
         )
+
         print(
-            f"{MUTED}{exc}{RESET}"
+            f"{BRIGHT_WHITE}{exc}{RESET}"
         )
 
 
